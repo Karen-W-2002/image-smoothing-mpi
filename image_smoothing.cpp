@@ -36,8 +36,6 @@ int main(int argc,char *argv[])
 
 	int i, j, count;
 	int slice, sliceBorder;
-	slice = NSmooth / comm_sz;
-	sliceBorder = my_rank * slice;
 
 	// Processor 0 starts time
 	if(my_rank == 0)
@@ -52,28 +50,84 @@ int main(int argc,char *argv[])
          	       cout << "Read file fails!!" << endl;
 	}
 
+	// Processor 0 calculates slice and broadcasts to others
+	if(my_rank == 0)
+	{
+		slice = bmpInfo.biHeight/comm_sz; // height
+	}
+	MPI_Bcast(&slice, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&bmpInfo.biWidth, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+	sliceBorder = my_rank * slice;
+
 	// Dynamically allocate memory to temporary storage space
-        BMPData = alloc_memory( bmpInfo.biHeight, bmpInfo.biWidth);
+	if(my_rank == 0)
+		BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
+	else
+	{
+        	BMPData = alloc_memory(slice, bmpInfo.biWidth);
+		BMPSaveData = alloc_memory(slice, bmpInfo.biWidth);
+	}
+
+	// Create MPI_Datatype for struct
+	const int items = 3;
+	int blocklengths[3] = {1, 1, 1};
+	MPI_Datatype types[3] = {MPI_UNSIGNED_CHAR, MPI_UNSIGNED_CHAR, MPI_UNSIGNED_CHAR};
+	MPI_Datatype MPI_RGBTRIPLE;
+	MPI_Aint offsets[3];
+	
+	offsets[0] = offsetof(tagRGBTRIPLE, rgbBlue);
+	offsets[1] = offsetof(tagRGBTRIPLE, rgbGreen);
+	offsets[2] = offsetof(tagRGBTRIPLE, rgbRed);
+
+	MPI_Type_create_struct(items, blocklengths, offsets, types, &MPI_RGBTRIPLE);
+	MPI_Type_commit(&MPI_RGBTRIPLE);
+
+	// Processor 0 scatters BMPData to others
+	int cutSize = slice * bmpInfo.biWidth;
+	if(my_rank == 0)
+	{
+		int *displ = (int*)malloc(sizeof(int) * comm_sz);
+		int *sendcounts = (int*)malloc(sizeof(int) * comm_sz);
+	
+		for(i = 0; i < comm_sz; i++)
+		{
+			sendcounts[i] = cutSize;
+			displ[i] = sliceBorder;
+		}
+		MPI_Scatterv(*BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+	} else  
+	{
+		MPI_Scatterv(NULL, NULL, NULL, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+	}
+		
+	printf("Processor %d: Scatter successful!\n", my_rank);
 
         // Smoothing operations
-	for(count = 0; count < NSmooth ; count ++){
+	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
 		swap(BMPSaveData,BMPData);
 
 		// the smoothing operation
-		for(i = 0; i < bmpInfo.biHeight; i++)
-			for(j = 0; j < bmpInfo.biWidth; j++) {
+		for(i = sliceBorder; i < sliceBorder + slice; i++)
+		{
+			for(j = 0; j < bmpInfo.biWidth; j++) 
+			{
 				// sets the directional position of the pixels
-				int Top = i>0 ? i-1 : bmpInfo.biHeight-1;
-				int Down = i<bmpInfo.biHeight-1 ? i+1 : 0;
+				int Top = i>0 ? i-1 : slice-1;
+				int Down = i<slice-1 ? i+1 : 0;
 				int Left = j>0 ? j-1 : bmpInfo.biWidth-1;
 				int Right = j<bmpInfo.biWidth-1 ? j+1 : 0;
-
+				if(my_rank != 0)
+				printf("Processor %d: test\n", my_rank);
 				// Average on the pixels (in all directions), then rounds up 
 				BMPSaveData[i][j].rgbBlue =  (double) (BMPData[i][j].rgbBlue+BMPData[Top][j].rgbBlue+BMPData[Top][Left].rgbBlue+BMPData[Top][Right].rgbBlue+BMPData[Down][j].rgbBlue+BMPData[Down][Left].rgbBlue+BMPData[Down][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;
 				BMPSaveData[i][j].rgbGreen =  (double) (BMPData[i][j].rgbGreen+BMPData[Top][j].rgbGreen+BMPData[Top][Left].rgbGreen+BMPData[Top][Right].rgbGreen+BMPData[Down][j].rgbGreen+BMPData[Down][Left].rgbGreen+BMPData[Down][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
 				BMPSaveData[i][j].rgbRed =  (double) (BMPData[i][j].rgbRed+BMPData[Top][j].rgbRed+BMPData[Top][Left].rgbRed+BMPData[Top][Right].rgbRed+BMPData[Down][j].rgbRed+BMPData[Down][Left].rgbRed+BMPData[Down][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;
+				if(my_rank != 0)
+				printf("Processor: %d: test2\n", my_rank);
 			}
+		}	
 	}
 
  	// Processor 0 saves the file
