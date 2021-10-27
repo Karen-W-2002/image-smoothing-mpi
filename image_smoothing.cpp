@@ -85,6 +85,7 @@ int main(int argc,char *argv[])
 
 	// Processor 0 scatters BMPData to others
 	int cutSize = slice * bmpInfo.biWidth;
+	MPI_Barrier(MPI_COMM_WORLD);
 	if(my_rank == 0)
 	{
 		int *displ = (int*)malloc(sizeof(int) * comm_sz);
@@ -109,7 +110,7 @@ int main(int argc,char *argv[])
 		swap(BMPSaveData,BMPData);
 
 		// the smoothing operation
-		for(i = sliceBorder; i < sliceBorder + slice; i++)
+		for(i = 0; i < slice; i++)
 		{
 			for(j = 0; j < bmpInfo.biWidth; j++) 
 			{
@@ -118,14 +119,10 @@ int main(int argc,char *argv[])
 				int Down = i<slice-1 ? i+1 : 0;
 				int Left = j>0 ? j-1 : bmpInfo.biWidth-1;
 				int Right = j<bmpInfo.biWidth-1 ? j+1 : 0;
-				if(my_rank != 0)
-				printf("Processor %d: test\n", my_rank);
 				// Average on the pixels (in all directions), then rounds up 
 				BMPSaveData[i][j].rgbBlue =  (double) (BMPData[i][j].rgbBlue+BMPData[Top][j].rgbBlue+BMPData[Top][Left].rgbBlue+BMPData[Top][Right].rgbBlue+BMPData[Down][j].rgbBlue+BMPData[Down][Left].rgbBlue+BMPData[Down][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;
 				BMPSaveData[i][j].rgbGreen =  (double) (BMPData[i][j].rgbGreen+BMPData[Top][j].rgbGreen+BMPData[Top][Left].rgbGreen+BMPData[Top][Right].rgbGreen+BMPData[Down][j].rgbGreen+BMPData[Down][Left].rgbGreen+BMPData[Down][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
 				BMPSaveData[i][j].rgbRed =  (double) (BMPData[i][j].rgbRed+BMPData[Top][j].rgbRed+BMPData[Top][Left].rgbRed+BMPData[Top][Right].rgbRed+BMPData[Down][j].rgbRed+BMPData[Down][Left].rgbRed+BMPData[Down][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;
-				if(my_rank != 0)
-				printf("Processor: %d: test2\n", my_rank);
 			}
 		}	
 	}
