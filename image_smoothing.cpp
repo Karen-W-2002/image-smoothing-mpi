@@ -94,9 +94,11 @@ int main(int argc,char *argv[])
 		for(i = 0; i < comm_sz; i++)
 		{
 			sendcounts[i] = cutSize;
-			displ[i] = sliceBorder;
+			displ[i] = slice * i;
 		}
 		MPI_Scatterv(*BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+		free(displ);
+		free(sendcounts);
 	} else  
 	{
 		MPI_Scatterv(NULL, NULL, NULL, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
@@ -126,6 +128,28 @@ int main(int argc,char *argv[])
 			}
 		}	
 	}
+
+	MPI_Barrier(MPI_COMM_WORLD);
+	// Processor 0 gathers the data
+	if(my_rank == 0)
+	{
+		int *displ = (int*)malloc(sizeof(int)*(comm_sz));
+		int *recvcounts = (int*)malloc(sizeof(int)*(comm_sz));
+		for(i = 0; i < comm_sz; i++)
+		{
+			displ[i] = slice * i;
+			recvcounts[i] = cutSize;
+		}
+		MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, *BMPSaveData, recvcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+		free(displ);
+		free(recvcounts);
+	} else
+	{
+		printf("Hello\n");
+		MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, NULL, NULL, NULL, NULL, 0, MPI_COMM_WORLD);
+	}
+
+	printf("Processor %d hello!\n", my_rank);
 
  	// Processor 0 saves the file
 	if(my_rank == 0)
