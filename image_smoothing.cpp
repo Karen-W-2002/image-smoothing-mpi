@@ -16,6 +16,7 @@ BMPHEADER bmpHeader;
 BMPINFO bmpInfo;
 RGBTRIPLE **BMPSaveData = NULL;
 RGBTRIPLE **BMPData = NULL;
+RGBTRIPLE **FinalBMPData = NULL;
 
 int readBMP( char *fileName); //read file
 int saveBMP( char *fileName); //save file
@@ -62,7 +63,12 @@ int main(int argc,char *argv[])
 
 	// Dynamically allocate memory to temporary storage space
 	if(my_rank == 0)
+	{
 		BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
+		FinalBMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
+	}
+		//BMPData = alloc_memory(slice, bmpInfo.biWidth);
+		//BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
 	else
 	{
         	BMPData = alloc_memory(slice, bmpInfo.biWidth);
@@ -85,25 +91,18 @@ int main(int argc,char *argv[])
 
 	// Processor 0 scatters BMPData to others
 	int cutSize = slice * bmpInfo.biWidth;
-	MPI_Barrier(MPI_COMM_WORLD);
-	if(my_rank == 0)
-	{
-		int *displ = (int*)malloc(sizeof(int) * comm_sz);
-		int *sendcounts = (int*)malloc(sizeof(int) * comm_sz);
+	int *displ = (int*)malloc(sizeof(int) * comm_sz);
+	int *sendcounts = (int*)malloc(sizeof(int) * comm_sz);
 	
-		for(i = 0; i < comm_sz; i++)
-		{
-			sendcounts[i] = cutSize;
-			displ[i] = slice * i;
-		}
-		MPI_Scatterv(*BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
-		free(displ);
-		free(sendcounts);
-	} else  
+	for(i = 0; i < comm_sz; i++)
 	{
-		MPI_Scatterv(NULL, NULL, NULL, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+		sendcounts[i] = cutSize;
+		displ[i] = slice * i;
 	}
-		
+	MPI_Scatterv(*BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+
+	
+
 	printf("Processor %d: Scatter successful!\n", my_rank);
 
         // Smoothing operations
@@ -131,25 +130,9 @@ int main(int argc,char *argv[])
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	// Processor 0 gathers the data
-	if(my_rank == 0)
-	{
-		int *displ = (int*)malloc(sizeof(int)*(comm_sz));
-		int *recvcounts = (int*)malloc(sizeof(int)*(comm_sz));
-		for(i = 0; i < comm_sz; i++)
-		{
-			displ[i] = slice * i;
-			recvcounts[i] = cutSize;
-		}
-		MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, *BMPSaveData, recvcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
-		free(displ);
-		free(recvcounts);
-	} else
-	{
-		printf("Hello\n");
-		MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, NULL, NULL, NULL, NULL, 0, MPI_COMM_WORLD);
-	}
-
-	printf("Processor %d hello!\n", my_rank);
+	MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, *BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+	free(displ);
+	free(sendcounts);
 
  	// Processor 0 saves the file
 	if(my_rank == 0)
@@ -172,7 +155,11 @@ int main(int argc,char *argv[])
  	free(BMPSaveData[0]);
  	free(BMPData);
  	free(BMPSaveData);
-
+	if(my_rank == 0)
+	{
+		free(FinalBMPData[0]);
+		free(FinalBMPData);
+	}
  	MPI_Finalize();
 
     return 0;
@@ -241,6 +228,7 @@ int saveBMP( char *fileName)
 
         newFile.write( ( char* )&bmpInfo, sizeof( BMPINFO ) );
 
+	//newFile.write( ( char* )FinalBMPData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight);
         newFile.write( ( char* )BMPSaveData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight );
 
         newFile.close();
