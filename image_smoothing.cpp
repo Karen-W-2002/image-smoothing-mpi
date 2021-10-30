@@ -16,7 +16,7 @@ BMPHEADER bmpHeader;
 BMPINFO bmpInfo;
 RGBTRIPLE **BMPSaveData = NULL;
 RGBTRIPLE **BMPData = NULL;
-RGBTRIPLE **FinalBMPData = NULL;
+RGBTRIPLE **BMPReadData = NULL;
 
 int readBMP( char *fileName); //read file
 int saveBMP( char *fileName); //save file
@@ -30,13 +30,11 @@ int main(int argc,char *argv[])
 	double startwtime = 0.0, endwtime=0;
 
 	int my_rank, comm_sz;
+	int i, j, count;
 
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
-
-	int i, j, count;
-	int slice, sliceBorder;
 
 	// Processor 0 starts time
 	if(my_rank == 0)
@@ -51,29 +49,14 @@ int main(int argc,char *argv[])
          	       cout << "Read file fails!!" << endl;
 	}
 
-	// Processor 0 calculates slice and broadcasts to others
-	if(my_rank == 0)
-	{
-		slice = bmpInfo.biHeight/comm_sz; // height
-	}
-	MPI_Bcast(&slice, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&bmpInfo.biHeight, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&bmpInfo.biWidth, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-	sliceBorder = my_rank * slice;
-
 	// Dynamically allocate memory to temporary storage space
-	if(my_rank == 0)
-	{
-		BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
-		FinalBMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
-	}
-		//BMPData = alloc_memory(slice, bmpInfo.biWidth);
-		//BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
-	else
-	{
-        	BMPData = alloc_memory(slice, bmpInfo.biWidth);
-		BMPSaveData = alloc_memory(slice, bmpInfo.biWidth);
-	}
+	BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
+	BMPSaveData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
+	if(my_rank != 0) 
+		BMPReadData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
 
 	// Create MPI_Datatype for struct
 	const int items = 3;
@@ -89,35 +72,35 @@ int main(int argc,char *argv[])
 	MPI_Type_create_struct(items, blocklengths, offsets, types, &MPI_RGBTRIPLE);
 	MPI_Type_commit(&MPI_RGBTRIPLE);
 
-	// Processor 0 scatters BMPData to others
-	int cutSize = slice * bmpInfo.biWidth;
+	// Some information
+	int slice = (bmpInfo.biHeight * bmpInfo.biWidth) / comm_sz;
+	int sliceBorder = slice * my_rank;
 	int *displ = (int*)malloc(sizeof(int) * comm_sz);
 	int *sendcounts = (int*)malloc(sizeof(int) * comm_sz);
 	
 	for(i = 0; i < comm_sz; i++)
 	{
-		sendcounts[i] = cutSize;
+		sendcounts[i] = slice;
 		displ[i] = slice * i;
 	}
-	MPI_Scatterv(*BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, cutSize, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
-
-	
+	// Process 0 scatters the data
+	MPI_Scatterv(*BMPReadData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, slice, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
 
 	printf("Processor %d: Scatter successful!\n", my_rank);
-
         // Smoothing operations
 	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
 		swap(BMPSaveData,BMPData);
-
+			
 		// the smoothing operation
-		for(i = 0; i < slice; i++)
+		int newHeight = bmpInfo.biHeight/comm_sz;
+		for(i = 0; i < newHeight; i++)
 		{
 			for(j = 0; j < bmpInfo.biWidth; j++) 
 			{
 				// sets the directional position of the pixels
-				int Top = i>0 ? i-1 : slice-1;
-				int Down = i<slice-1 ? i+1 : 0;
+				int Top = i>0 ? i-1 : newHeight-1;
+				int Down = i<newHeight-1 ? i+1 : 0;
 				int Left = j>0 ? j-1 : bmpInfo.biWidth-1;
 				int Right = j<bmpInfo.biWidth-1 ? j+1 : 0;
 				// Average on the pixels (in all directions), then rounds up 
@@ -130,9 +113,7 @@ int main(int argc,char *argv[])
 
 	MPI_Barrier(MPI_COMM_WORLD);
 	// Processor 0 gathers the data
-	MPI_Gatherv(*BMPSaveData, cutSize, MPI_RGBTRIPLE, *BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
-	free(displ);
-	free(sendcounts);
+	MPI_Gatherv(*BMPSaveData, slice, MPI_RGBTRIPLE, *BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
 
  	// Processor 0 saves the file
 	if(my_rank == 0)
@@ -151,15 +132,14 @@ int main(int argc,char *argv[])
     		cout << "The execution time = "<< endwtime-startwtime <<endl ;
 	}
 
+	free(sendcounts);
+	free(displ);
 	free(BMPData[0]);
  	free(BMPSaveData[0]);
+	free(BMPReadData[0]);
  	free(BMPData);
- 	free(BMPSaveData);
-	if(my_rank == 0)
-	{
-		free(FinalBMPData[0]);
-		free(FinalBMPData);
-	}
+ 	free(BMPSaveData);	
+	free(BMPReadData);
  	MPI_Finalize();
 
     return 0;
@@ -199,10 +179,10 @@ int readBMP(char *fileName)
         	bmpInfo.biWidth++;
 
         // Dynamically allocates memory
-        BMPSaveData = alloc_memory( bmpInfo.biHeight, bmpInfo.biWidth);
+	BMPReadData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
 
         // Read pixel data
-	bmpFile.read( (char* )BMPSaveData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight);
+	bmpFile.read( (char* )BMPReadData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight);
 
         // Close file
         bmpFile.close();
@@ -228,7 +208,6 @@ int saveBMP( char *fileName)
 
         newFile.write( ( char* )&bmpInfo, sizeof( BMPINFO ) );
 
-	//newFile.write( ( char* )FinalBMPData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight);
         newFile.write( ( char* )BMPSaveData[0], bmpInfo.biWidth*sizeof(RGBTRIPLE)*bmpInfo.biHeight );
 
         newFile.close();
