@@ -91,33 +91,7 @@ int main(int argc,char *argv[])
 	// Process 0 scatters the data
 	MPI_Scatterv(*BMPReadData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, slice, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
 	int newHeight = bmpInfo.biHeight/comm_sz;
-
-	// Each process gets their data of the other processors
-	if(comm_sz > 1)
-	{
-		if(my_rank == 0 && comm_sz)
-		{
-			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD);
-			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
-		}
-		else if(my_rank == comm_sz - 1)
-		{
-			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
-			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD);
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD, &status);
-		}
-		else 
-		{
-			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
-			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
-		}
-	}
-
+	
         // Smoothing operations
 	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
@@ -128,6 +102,32 @@ int main(int argc,char *argv[])
 		{
 			for(j = 0; j < bmpInfo.biWidth; j++) 
 			{
+				// Each process gets their data of the other processors
+				if(comm_sz > 1)
+				{
+					if(my_rank == 0 && comm_sz)
+					{
+						MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD);
+						MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
+						MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD, &status);
+						MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
+					}
+					else if(my_rank == comm_sz - 1)
+					{
+						MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
+						MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD);
+						MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
+						MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD, &status);
+					}
+					else 
+					{
+						MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
+						MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
+						MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
+						MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
+					}
+				}
+				
 				// sets the directional position of the pixels
 				int Top = i>0 ? i-1 : newHeight-1;
 				int Down = i<newHeight-1 ? i+1 : 0;
@@ -161,7 +161,6 @@ int main(int argc,char *argv[])
 		}	
 	}
 
-	MPI_Barrier(MPI_COMM_WORLD);
 	// Processor 0 gathers the data
 	MPI_Gatherv(*BMPSaveData, slice, MPI_RGBTRIPLE, *BMPSaveData, sendcounts, displ, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
 
