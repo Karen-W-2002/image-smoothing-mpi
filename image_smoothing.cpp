@@ -18,6 +18,9 @@ RGBTRIPLE **BMPSaveData = NULL;
 RGBTRIPLE **BMPData = NULL;
 RGBTRIPLE **BMPReadData = NULL;
 
+RGBTRIPLE **tempTopData = NULL;
+RGBTRIPLE **tempBottomData = NULL;
+
 int readBMP( char *fileName); //read file
 int saveBMP( char *fileName); //save file
 void swap(RGBTRIPLE *a, RGBTRIPLE *b);
@@ -35,6 +38,7 @@ int main(int argc,char *argv[])
 	MPI_Init(&argc, &argv);
 	MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
+	MPI_Status status;
 
 	// Processor 0 starts time
 	if(my_rank == 0)
@@ -53,6 +57,8 @@ int main(int argc,char *argv[])
 	MPI_Bcast(&bmpInfo.biWidth, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
 	// Dynamically allocate memory to temporary storage space
+	tempTopData = alloc_memory(1, bmpInfo.biWidth);
+	tempBottomData = alloc_memory(1, bmpInfo.biWidth);
 	BMPData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
 	BMPSaveData = alloc_memory(bmpInfo.biHeight, bmpInfo.biWidth);
 	if(my_rank != 0) 
@@ -74,7 +80,6 @@ int main(int argc,char *argv[])
 
 	// Some information
 	int slice = (bmpInfo.biHeight * bmpInfo.biWidth) / comm_sz;
-	int sliceBorder = slice * my_rank;
 	int *displ = (int*)malloc(sizeof(int) * comm_sz);
 	int *sendcounts = (int*)malloc(sizeof(int) * comm_sz);
 	
@@ -85,15 +90,40 @@ int main(int argc,char *argv[])
 	}
 	// Process 0 scatters the data
 	MPI_Scatterv(*BMPReadData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, slice, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
+	int newHeight = bmpInfo.biHeight/comm_sz;
 
-	printf("Processor %d: Scatter successful!\n", my_rank);
+	// Each process gets their data of the other processors
+	if(comm_sz > 1)
+	{
+		if(my_rank == 0 && comm_sz)
+		{
+			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD);
+			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
+			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
+		}
+		else if(my_rank == comm_sz - 1)
+		{
+			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
+			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD);
+			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD, &status);
+		}
+		else 
+		{
+			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
+			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
+			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
+			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
+		}
+	}
+
         // Smoothing operations
 	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
 		swap(BMPSaveData,BMPData);
 			
 		// the smoothing operation
-		int newHeight = bmpInfo.biHeight/comm_sz;
 		for(i = 0; i < newHeight; i++)
 		{
 			for(j = 0; j < bmpInfo.biWidth; j++) 
@@ -103,10 +133,30 @@ int main(int argc,char *argv[])
 				int Down = i<newHeight-1 ? i+1 : 0;
 				int Left = j>0 ? j-1 : bmpInfo.biWidth-1;
 				int Right = j<bmpInfo.biWidth-1 ? j+1 : 0;
-				// Average on the pixels (in all directions), then rounds up 
-				BMPSaveData[i][j].rgbBlue =  (double) (BMPData[i][j].rgbBlue+BMPData[Top][j].rgbBlue+BMPData[Top][Left].rgbBlue+BMPData[Top][Right].rgbBlue+BMPData[Down][j].rgbBlue+BMPData[Down][Left].rgbBlue+BMPData[Down][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;
-				BMPSaveData[i][j].rgbGreen =  (double) (BMPData[i][j].rgbGreen+BMPData[Top][j].rgbGreen+BMPData[Top][Left].rgbGreen+BMPData[Top][Right].rgbGreen+BMPData[Down][j].rgbGreen+BMPData[Down][Left].rgbGreen+BMPData[Down][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
-				BMPSaveData[i][j].rgbRed =  (double) (BMPData[i][j].rgbRed+BMPData[Top][j].rgbRed+BMPData[Top][Left].rgbRed+BMPData[Top][Right].rgbRed+BMPData[Down][j].rgbRed+BMPData[Down][Left].rgbRed+BMPData[Down][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;
+
+				// Average on the pixels (all directions), then rounds up
+				if(i == 0)
+				{
+					// top, i = 0
+					BMPSaveData[i][j].rgbBlue = (double) (BMPData[i][j].rgbBlue+tempTopData[0][j].rgbBlue+tempTopData[0][Left].rgbBlue+tempTopData[0][Right].rgbBlue+BMPData[Down][j].rgbBlue+BMPData[Down][Left].rgbBlue+BMPData[Down][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;
+					BMPSaveData[i][j].rgbGreen = (double) (BMPData[i][j].rgbGreen+tempTopData[0][j].rgbGreen+tempTopData[0][Left].rgbGreen+tempTopData[0][Right].rgbGreen+BMPData[Down][j].rgbGreen+BMPData[Down][Left].rgbGreen+BMPData[Down][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
+					BMPSaveData[i][j].rgbRed = (double) (BMPData[i][j].rgbRed+tempTopData[0][j].rgbRed+tempTopData[0][Left].rgbRed+tempTopData[0][Right].rgbRed+BMPData[Down][j].rgbRed+BMPData[Down][Left].rgbRed+BMPData[Down][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;
+				
+				}
+				else if(i == (newHeight -1))
+				{
+					// bottom, i = newHeight - 1		
+					BMPSaveData[i][j].rgbBlue = (double) (BMPData[i][j].rgbBlue+BMPData[Top][j].rgbBlue+BMPData[Top][Left].rgbBlue+BMPData[Top][Right].rgbBlue+tempBottomData[0][j].rgbBlue+tempBottomData[0][Left].rgbBlue+tempBottomData[0][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;	
+					BMPSaveData[i][j].rgbGreen = (double) (BMPData[i][j].rgbGreen+BMPData[Top][j].rgbGreen+BMPData[Top][Left].rgbGreen+BMPData[Top][Right].rgbGreen+tempBottomData[0][j].rgbGreen+tempBottomData[0][Left].rgbGreen+tempBottomData[0][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
+					BMPSaveData[i][j].rgbRed = (double) (BMPData[i][j].rgbRed+BMPData[Top][j].rgbRed+BMPData[Top][Left].rgbRed+BMPData[Top][Right].rgbRed+tempBottomData[0][j].rgbRed+tempBottomData[0][Left].rgbRed+tempBottomData[0][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;
+
+				}
+				else
+				{
+					BMPSaveData[i][j].rgbBlue =  (double) (BMPData[i][j].rgbBlue+BMPData[Top][j].rgbBlue+BMPData[Top][Left].rgbBlue+BMPData[Top][Right].rgbBlue+BMPData[Down][j].rgbBlue+BMPData[Down][Left].rgbBlue+BMPData[Down][Right].rgbBlue+BMPData[i][Left].rgbBlue+BMPData[i][Right].rgbBlue)/9+0.5;
+					BMPSaveData[i][j].rgbGreen =  (double) (BMPData[i][j].rgbGreen+BMPData[Top][j].rgbGreen+BMPData[Top][Left].rgbGreen+BMPData[Top][Right].rgbGreen+BMPData[Down][j].rgbGreen+BMPData[Down][Left].rgbGreen+BMPData[Down][Right].rgbGreen+BMPData[i][Left].rgbGreen+BMPData[i][Right].rgbGreen)/9+0.5;
+					BMPSaveData[i][j].rgbRed =  (double) (BMPData[i][j].rgbRed+BMPData[Top][j].rgbRed+BMPData[Top][Left].rgbRed+BMPData[Top][Right].rgbRed+BMPData[Down][j].rgbRed+BMPData[Down][Left].rgbRed+BMPData[Down][Right].rgbRed+BMPData[i][Left].rgbRed+BMPData[i][Right].rgbRed)/9+0.5;	
+				}
 			}
 		}	
 	}
@@ -140,6 +190,8 @@ int main(int argc,char *argv[])
  	free(BMPData);
  	free(BMPSaveData);	
 	free(BMPReadData);
+	free(tempTopData);
+	free(tempBottomData);
  	MPI_Finalize();
 
     return 0;
