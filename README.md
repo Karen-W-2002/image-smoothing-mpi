@@ -2,7 +2,7 @@
 Program written in C with the use of MPI
 
 ### Description 
-
+Image smoothing of a bmp file using parallelisation. This image is smoothed over 1000 times and parallelisation will allow this image to be processed faster. The image smoothing is done by averaging the pixels around the current pixel, and parallelisation is done mostly through MPI's scatter and gather (vector in this case).
 
 ### Program Functions
 - **main(int argc, char \*argv[])**
@@ -52,9 +52,10 @@ Program written in C with the use of MPI
 ### Execution
 `mpiexec -n (# of processors) image_smoothing.out`
 ## Results
+![Image of a graph](https://github.com/Karen-W-2002/image-smoothing-mpi/blob/main/graph.png)
 
 ### Analysis on the results
-The change is not too significant compared to the other parallel programs. This might be because of how many times each processor needs to send and recieve from eachother to update their data
+The change is not too significant compared to the other parallel programs, however it is very significant for the first processor to the 4th, in itself. This might be because of how many times each processor needs to send and recieve from eachother to update their data
 
 But the negative slope does mean that the time has definitely increased because of parallelisation
 
