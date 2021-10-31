@@ -48,7 +48,7 @@ Image smoothing of a bmp file using parallelisation. This image is smoothed over
 - MPI_Gatherv()
 
 ### Compilation
-`mpiicc -o image_smoothing.out image_smoothing.cpp`
+`mpiicc -no-multibyte-chars -o image_smoothing.out image_smoothing.cpp`
 ### Execution
 `mpiexec -n (# of processors) image_smoothing.out`
 ## Results
