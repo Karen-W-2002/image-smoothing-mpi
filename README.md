@@ -63,6 +63,3 @@ But the negative slope does mean that the time has definitely increased because 
 For parallelizing the image smoothing program, the most tedious part I had to do was debugging a part because I did a calculation wrong for the displacement. However, that was not a difficult part at all.
 
 The most difficult part of this was every loop, every single processor has to pass a part of their program to their neighbors so they can perform smoothing with a newly updated data. I am worried that this can result in making the program much slower than it is supposed to be. Also makes the code a bit messier.
-
-## My errors
-The code is not perfect yet, and this is because of problems updating the data between each processor. So you can see in the result that the image is not smooth enough between the processors, however everything else works perfectly fine, including vector scatter and gather.
