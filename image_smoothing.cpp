@@ -93,48 +93,6 @@ int main(int argc,char *argv[])
 	MPI_Scatterv(*BMPReadData, sendcounts, displ, MPI_RGBTRIPLE, *BMPSaveData, slice, MPI_RGBTRIPLE, 0, MPI_COMM_WORLD);
 	int newHeight = bmpInfo.biHeight/comm_sz;
 
-	// Each process gets their data of the other processors
-	/*if(comm_sz > 1)
-	{
-		if(my_rank == 0 && comm_sz)
-		{
-			if(comm_sz > 2) 
-			{
-				MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD);
-				MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
-			} else
-			{
-				MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD);
-				MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
-			}
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, comm_sz - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
-		}
-		else if(my_rank == comm_sz - 1)
-		{
-			if(comm_sz > 2)
-			{
-				MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
-				MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD);
-			} else
-			{
-				MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
-				MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD);
-			}
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, 0, 0, MPI_COMM_WORLD, &status);
-		}
-		else 
-		{
-			MPI_Send(BMPSaveData[0], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD);
-			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
-			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
-			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
-		}
-
-		update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
-	}*/
-
         // Smoothing operations
 	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
