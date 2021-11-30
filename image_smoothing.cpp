@@ -94,9 +94,9 @@ int main(int argc,char *argv[])
 	int newHeight = bmpInfo.biHeight/comm_sz;
 
 	// Each process gets their data of the other processors
-	if(comm_sz > 1)
+	/*if(comm_sz > 1)
 	{
-	/*	if(my_rank == 0 && comm_sz)
+		if(my_rank == 0 && comm_sz)
 		{
 			if(comm_sz > 2) 
 			{
@@ -130,16 +130,17 @@ int main(int argc,char *argv[])
 			MPI_Send(BMPSaveData[newHeight-1], bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD);
 			MPI_Recv(*tempTopData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank - 1, 0, MPI_COMM_WORLD, &status);
 			MPI_Recv(*tempBottomData, bmpInfo.biWidth, MPI_RGBTRIPLE, my_rank + 1, 0, MPI_COMM_WORLD, &status);
-		}*/
+		}
 
 		update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
-	}
+	}*/
 
         // Smoothing operations
 	for(count = 0; count < NSmooth; count ++){
 		// exchange pixel data with temporary storage indicators
+		if(comm_sz > 1) update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
 		swap(BMPSaveData,BMPData);
-		if(comm_sz - 1) update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
+		//if(comm_sz > 1) update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
 		
 		// the smoothing operation
 		for(i = 0; i < newHeight; i++)
