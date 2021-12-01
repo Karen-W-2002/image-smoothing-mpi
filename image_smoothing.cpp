@@ -98,7 +98,6 @@ int main(int argc,char *argv[])
 		// exchange pixel data with temporary storage indicators
 		if(comm_sz > 1) update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
 		swap(BMPSaveData,BMPData);
-		//if(comm_sz > 1) update_data(my_rank, comm_sz, tempTopData, tempBottomData, BMPSaveData, bmpInfo, MPI_RGBTRIPLE, &status, newHeight);
 		
 		// the smoothing operation
 		for(i = 0; i < newHeight; i++)
