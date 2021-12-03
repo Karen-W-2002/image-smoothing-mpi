@@ -1,5 +1,5 @@
 # Parallel Image Smoothing
-Program written in C with the use of MPI
+Program written in C++ with the use of MPI
 
 ### Description 
 Image smoothing of a bmp file using parallelisation. This image is smoothed over 1000 times and parallelisation will allow this image to be processed faster. The image smoothing is done by averaging the pixels around the current pixel, and parallelisation is done mostly through MPI's scatter and gather (vector in this case).
@@ -19,6 +19,9 @@ Image smoothing of a bmp file using parallelisation. This image is smoothed over
 
 - **RGBTRIPLE \*\*alloc_memory(int Y, int X)**
   - Dynmically allocates memory
+
+- **void update_data(int my_rank, int comm_sz, RGBTRIPLE \*\*TempTopData, RGBTRIPLE **TempBottomData, RGBTRIPLE \*\*BMPSaveData, BMPINFO bmpInfo, MPI_Datatype MPI_RGBTRIPLE, MPI_Status \*status, int newHeight)**
+  - Updates each processor's data with other processors border datas 
 
 ### Sections of The Program
 *The program can be organized into different sections*
