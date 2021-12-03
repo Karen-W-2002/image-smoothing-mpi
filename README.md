@@ -20,7 +20,7 @@ Image smoothing of a bmp file using parallelisation. This image is smoothed over
 - **RGBTRIPLE \*\*alloc_memory(int Y, int X)**
   - Dynmically allocates memory
 
-- **void update_data(int my_rank, int comm_sz, RGBTRIPLE \*\*TempTopData, RGBTRIPLE **TempBottomData, RGBTRIPLE \*\*BMPSaveData, BMPINFO bmpInfo, MPI_Datatype MPI_RGBTRIPLE, MPI_Status \*status, int newHeight)**
+- **void update_data(int my_rank, int comm_sz, RGBTRIPLE \*\*TempTopData, RGBTRIPLE \*\*TempBottomData, RGBTRIPLE \*\*BMPSaveData, BMPINFO bmpInfo, MPI_Datatype MPI_RGBTRIPLE, MPI_Status \*status, int newHeight)**
   - Updates each processor's data with other processors border datas 
 
 ### Sections of The Program
